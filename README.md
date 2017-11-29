@@ -6,6 +6,7 @@ This implementation mimics the [Nexmo Android SDK](https://github.com/Nexmo/veri
 
 ## Usage
 
+### For VerifySearch request
 ```go
 import nexmo "github.com/hashlabs/nexmo-verify-go-sdk"
 
@@ -22,6 +23,40 @@ if err != nil {
 
 // Use the response struct to check for the user_status
 ```
+### For VerifyRequest
+```go
+import nexmo "github.com/hashlabs/nexmo-verify-go-sdk"
+
+client := nexmo.NewClientV2(<apiKey>, <apiSecret>)
+
+response, err := client.VerifyRequest(map[string]string {
+  "number":         "+911111111111",
+  "brand": "FooBarCompany",
+})
+if err != nil {
+  panic(err)
+}
+
+// Use the response struct to check for the user_status
+```
+
+### For VerifyCheck
+```go
+import nexmo "github.com/hashlabs/nexmo-verify-go-sdk"
+
+client := nexmo.NewClientV2(<apiKey>, <apiSecret>)
+
+response, err := client.VerifyRequest(map[string]string {
+  "request_id":         "fromTheVerifyRequestResponseValues",
+  "code": "sms_code",
+})
+if err != nil {
+  panic(err)
+}
+
+// Use the response struct to check for the user_status
+```
+
 
 ## Endpoints
 

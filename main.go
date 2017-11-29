@@ -16,8 +16,10 @@ import (
 )
 
 var endpointUrls = map[string]string{
-	"getToken":     "https://api.nexmo.com/sdk/token/json",
-	"verifySearch": "https://api.nexmo.com/sdk/verify/search/json",
+	"getToken":      "https://api.nexmo.com/sdk/token/json",
+	"verifySearch":  "https://api.nexmo.com/sdk/verify/search/json",
+	"verifyRequest": "https://api.nexmo.com/verify/json",
+	"verifyCheck":   "https://api.nexmo.com/verify/check/json",
 }
 
 var tokenReplaceRegexp, _ = regexp.Compile("[&,=]")
@@ -33,12 +35,25 @@ func NewClient(appId, sharedSecret string) *Client {
 	}
 }
 
+func NewClientV2(apiKey, apiSecret string) *ClientV2 {
+	// Creates client with apikey and apisecret used for newest nexmo-api
+	return &ClientV2{
+		apiKey:    apiKey,
+		apiSecret: apiSecret,
+	}
+}
+
 type Client struct {
 	appId        string
 	osFamily     string
 	osRevision   string
 	sdkRevision  string
 	sharedSecret string
+}
+
+type ClientV2 struct {
+	apiKey    string
+	apiSecret string
 }
 
 type BaseResponse struct {
@@ -52,9 +67,74 @@ type VerifySearchResponse struct {
 	UserStatus string `json:"user_status"`
 }
 
+type VerifyRequestResponse struct {
+	RequestId string `json:"request_id"`
+	Status    string `json:"status"`
+	ErrorText string `json:"error_text"`
+}
+
+type VerifyCheckResponse struct {
+	VerifyRequestResponse
+	EventId  string `json:"event_id"`
+	Price    string `json:"price"`
+	Currency string `json:"currency"`
+}
+
 type GetTokenResponse struct {
 	BaseResponse
 	Token string `json:"token"`
+}
+
+// VerifyRequest needs the params map to have `number` and `brand`. `number` should be in countrycode+phonenumber format.
+func (self *ClientV2) VerifyRequest(params map[string]string) (VerifyRequestResponse, error) {
+	var respObj VerifyRequestResponse
+
+	req, err := self.generateRequestV2(params, endpointUrls["verifyRequest"])
+	if err != nil {
+		return respObj, err
+	}
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return respObj, err
+	}
+
+	defer resp.Body.Close()
+	content, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	if err := json.Unmarshal(content, &respObj); err != nil {
+		return respObj, err
+	}
+
+	return respObj, nil
+}
+
+//VerifyCheck requires request_id and code to be passed as params.
+func (self *ClientV2) VerifyCheck(params map[string]string) (VerifyCheckResponse, error) {
+	var respObj VerifyCheckResponse
+
+	req, err := self.generateRequestV2(params, endpointUrls["verifyCheck"])
+	if err != nil {
+		return respObj, err
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return respObj, err
+	}
+
+	defer resp.Body.Close()
+	content, _ := ioutil.ReadAll(resp.Body)
+
+	if err := json.Unmarshal(content, &respObj); err != nil {
+		return respObj, err
+	}
+
+	return respObj, nil
 }
 
 // VerifySearch accepts a map[string]string with device_id, source_ip_address, number and country (optional)
@@ -129,7 +209,6 @@ func (self *Client) GetToken(params map[string]string) (GetTokenResponse, error)
 	if err := json.Unmarshal(content, &respObj); err != nil {
 		return respObj, err
 	}
-
 	return respObj, nil
 }
 
@@ -146,6 +225,28 @@ func (self *Client) generateRequest(params map[string]string, url string) (*http
 	req.Header.Add("X-NEXMO-SDK-REVISION", self.sdkRevision)
 
 	return req, nil
+}
+
+func (self *ClientV2) generateRequestV2(params map[string]string, url string) (*http.Request, error) {
+	payload := generateParametersV2(params, self.apiKey, self.apiSecret)
+	queryString := mapToQueryString(payload)
+
+	req, _ := http.NewRequest("GET", url+"?"+queryString, bytes.NewBuffer([]byte(``)))
+
+	return req, nil
+}
+
+func generateParametersV2(params map[string]string, apiKey, apiSecret string) map[string]string {
+	copyParams := make(map[string]string)
+
+	for key, value := range params {
+		copyParams[key] = value
+	}
+
+	copyParams["api_key"] = apiKey
+	copyParams["api_secret"] = apiSecret
+
+	return copyParams
 }
 
 func generateParameters(params map[string]string, appId, sharedSecret string) map[string]string {
